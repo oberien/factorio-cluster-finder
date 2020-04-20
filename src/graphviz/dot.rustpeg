@@ -1,0 +1,110 @@
+// TODO: node_id
+// TODO: ports
+
+pub graph -> GraphInternal
+    = strict:"strict"i? __ _type:graph_type __ id:id? __ '{'
+        __ stmts:stmt_list __
+    '}' __ eof {
+        GraphInternal {
+            strict: strict.is_some(),
+            _type: _type,
+            id: id,
+            statements: stmts,
+        }
+    }
+
+pub graph_type -> GraphType
+    = t:$("digraph"i / "graph"i) {
+        match &*t.to_uppercase() {
+            "DIGRAPH" => GraphType::Digraph,
+            "GRAPH" => GraphType::Graph,
+            _ => unreachable!()
+        }
+    }
+
+pub stmt_list -> Vec<Statement>
+    = (s:stmt ';'? __ { s })*
+
+pub stmt -> Statement
+    = a:attr_stmt { Statement::GlobalAttribute(a) }
+    / e:edge_stmt { Statement::Edge(e) }
+    / n:node_stmt { Statement::Node(n) }
+    // TODO: Subgraph
+
+pub node_stmt -> Node
+    = id:id __ attrs:attr_list? {
+        Node {
+            id: id,
+            attributes: attrs.unwrap_or_default(),
+        }
+    }
+
+// TODO: Subgraph
+// TODO: make sure -- is used for graph and -> for digraph
+pub edge_stmt -> EdgeInternal
+    = node_id:id others:(__ ("--" / "->") __ id:id { id })+ __ attrs:attr_list? {
+        let mut nodes = vec![node_id];
+        nodes.append(&mut others.clone());
+        EdgeInternal {
+            nodes: nodes,
+            attributes: attrs.unwrap_or_default(),
+        }
+    }
+
+pub attr_stmt -> GlobalAttribute
+    = t:attr_type __ a:attr_list { GlobalAttribute::new(t, a) }
+
+pub attr_type -> AttributeType
+    = t:$(("graph" / "node" / "edge")) {
+        match t {
+            "graph" => AttributeType::Graph,
+            "node" => AttributeType::Node,
+            "edge" => AttributeType::Edge,
+            _ => unreachable!()
+        }
+    }
+
+pub attr_list -> HashMap<String, String>
+    = a:('[' __ a:a_list? __ ']' { a })+ {
+        a.iter().flat_map(|opt| opt).flat_map(|v| v).cloned().collect()
+    }
+
+pub a_list -> Vec<(String, String)>
+    = key_val ++ ((';' / ',' / __) __)
+
+pub key_val -> (String, String)
+    = key:id __ '=' __ val:id { (key, val) }
+
+pub id -> String
+    = doubleQuotedString
+    / html
+    / s:$([a-zA-Z_][a-zA-Z_0-9]*) { s.to_string() }
+    / s:$('-'?('.'[0-9]+ / [0-9]+('.'[0-9]*)?)) { s.to_string() }
+
+pub doubleQuotedString -> String
+    = '"' res:doubleQuotedInner '"' { res }
+
+pub doubleQuotedInner -> String
+    = s:(escaped / s:$([^"]) { s.to_string() })* { s.join("") }
+
+pub escaped -> String
+    = '\\' s:$(.) { s.to_string() }
+
+pub html -> String
+    = s:$('<' (html / .)* '>') { s.to_string() }
+
+__ = #quiet<(whitespace / eol)*>
+
+/* Modeled after ECMA-262, 5th ed., 7.3. */
+eol
+  = "\n"
+  / "\r\n"
+  / "\r"
+  / "\u{2028}"
+  / "\u{2029}"
+
+/* Modeled after ECMA-262, 5th ed., 7.2. */
+whitespace
+    = [ \t\u{00A0}\u{FEFF}\u{1680}\u{180E}\u{2000}-\u{200A}\u{202F}\u{205F}\u{3000}] // \v\f removed
+
+eof = !.
