@@ -36,7 +36,11 @@ These are some preliminary discoveries we found, without further analysis (for n
 
 The algorithm used is a trivial greedy search over the dependency graph.
 It works on two rules:
-* Try to minimize the sum of different inputs and
+* Try to minimize the sum of inputs and outputs.
+  Inputs are dependencies, which are not in the subgraph.
+  Outputs are items, which are a dependency of at least one other item not in the subgraph.
+* If there are items, which can be produced without adding any further input-depndency, add them.
+  This is because it's trivial to produce them as all items required to build them are already within the subfactory.
 
 # Restrictions
 
